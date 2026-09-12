@@ -31,7 +31,33 @@ HEADERS = {
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.zhihu.com",
     "Accept": "application/json, text/plain, */*",
+    "x-requested-with": "fetch",
+    "x-zse-93": "101_3_3.0",
 }
+
+# 全局Cookie和d_c0
+ZHIHU_COOKIE = ""
+ZHIHU_DC0 = ""
+
+
+def set_zhihu_cookie(cookie):
+    """设置知乎Cookie并提取d_c0"""
+    global ZHIHU_COOKIE, ZHIHU_DC0
+    ZHIHU_COOKIE = cookie
+    HEADERS["Cookie"] = cookie
+    import re
+    match = re.search(r'd_c0=([^;]+)', cookie)
+    if match:
+        ZHIHU_DC0 = match.group(1)
+
+
+def sign_zhihu_request(url_path, body=""):
+    """生成知乎x-zse-96签名"""
+    import hashlib
+    x_zse_93 = "101_3_3.0"
+    raw = f"{x_zse_93}{url_path}{body}{ZHIHU_DC0}"
+    md5 = hashlib.md5(raw.encode()).hexdigest()
+    return f"{x_zse_93}+{md5}"
 
 # 停用词（精简版）
 STOP_WORDS = {
@@ -133,10 +159,45 @@ def print_progress(current, total, prefix=""):
         print()
 
 
+def parse_time(value, fmt="%Y-%m-%d"):
+    """通用时间解析：支持时间戳和ISO格式字符串"""
+    if not value:
+        return ""
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value).strftime(fmt)
+        if isinstance(value, str):
+            # 尝试数字时间戳
+            try:
+                return datetime.fromtimestamp(int(value)).strftime(fmt)
+            except (ValueError, OSError):
+                pass
+            # 尝试ISO格式
+            try:
+                return datetime.fromisoformat(value.replace('Z', '+00:00')).strftime(fmt)
+            except ValueError:
+                pass
+            return value
+    except Exception:
+        return str(value) if value else ""
+    return str(value) if value else ""
+
+
 def safe_get(url, params=None, cookies=None, retries=3, delay=2):
+    """带重试的GET请求，自动加x-zse-96签名"""
+    from urllib.parse import urlparse, urlencode
+    parsed = urlparse(url)
+    url_path = parsed.path
+    if params:
+        url_path = f"{url_path}?{urlencode(params)}"
+    
+    headers = dict(HEADERS)
+    if ZHIHU_DC0:
+        headers["x-zse-96"] = sign_zhihu_request(url_path)
+    
     for i in range(retries):
         try:
-            resp = requests.get(url, params=params, headers=HEADERS,
+            resp = requests.get(url, params=params, headers=headers,
                                 cookies=cookies, timeout=15)
             if resp.status_code == 401:
                 print("\n❌ 401未授权，请检查Cookie是否正确")
@@ -196,14 +257,17 @@ def load_cookie(cookie_str=None, cookie_file=None):
 
 def get_user_info(url_token, cookies=None):
     """获取用户信息"""
-    url = f"https://www.zhihu.com/api/v4/people/{url_token}"
+    url = f"https://www.zhihu.com/api/v4/members/{url_token}"
     resp = safe_get(url, cookies=cookies)
     if not resp:
         return None
     data = resp.json()
+    print(f"   调试 - 用户信息所有字段: {list(data.keys())}")
+    print(f"   调试 - id: {data.get('id')}, url_token: {data.get('url_token')}")
+    print(f"   调试 - 完整数据: {str(data)[:500]}")
     return {
         "id": data.get("id", ""),
-        "url_token": data.get("url_token", ""),
+        "url_token": data.get("url_token", url_token),
         "name": data.get("name", ""),
         "headline": data.get("headline", ""),
         "follower_count": data.get("follower_count", 0),
@@ -216,38 +280,120 @@ def get_user_info(url_token, cookies=None):
 
 
 def get_collections(url_token, cookies=None):
-    """获取用户收藏夹列表"""
+    """获取用户收藏夹列表（用playwright渲染动态页面）"""
     all_collections = []
-    url = f"https://www.zhihu.com/api/v4/people/{url_token}/collections"
-    offset = 0
-    limit = 20
-
-    while True:
-        params = {"limit": limit, "offset": offset}
-        resp = safe_get(url, params=params, cookies=cookies)
-        if not resp:
-            break
-        data = resp.json()
-        collections = data.get("data", [])
-        if not collections:
-            break
-
-        for c in collections:
-            all_collections.append({
-                "id": c["id"],
-                "title": c.get("title", ""),
-                "description": c.get("description", ""),
-                "item_count": c.get("item_count", 0),
-                "follower_count": c.get("follower_count", 0),
-                "created_time": datetime.fromtimestamp(c.get("created_time", 0)).strftime("%Y-%m-%d"),
-                "updated_time": datetime.fromtimestamp(c.get("updated_time", 0)).strftime("%Y-%m-%d"),
-            })
-
-        if data.get("paging", {}).get("is_end", True):
-            break
-        offset += limit
-        time.sleep(0.5)
-
+    
+    # 方法1：用playwright打开收藏夹页面，等待动态加载
+    print(f"   用playwright打开收藏夹页面...")
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent=HEADERS["User-Agent"],
+                locale="zh-CN",
+            )
+            # 设置Cookie
+            if cookies:
+                cookie_list = []
+                for name, value in cookies.items():
+                    cookie_list.append({
+                        "name": name,
+                        "value": value,
+                        "domain": ".zhihu.com",
+                        "path": "/",
+                    })
+                context.add_cookies(cookie_list)
+            
+            page = context.new_page()
+            page.goto(f"https://www.zhihu.com/people/{url_token}/collections", wait_until="networkidle", timeout=30000)
+            time.sleep(3)
+            
+            content = page.content()
+            print(f"   页面长度: {len(content)}")
+            
+            # 从页面脚本中提取initialData
+            import re
+            import json
+            match = re.search(r'initialData\s*=\s*({.*?})\s*;?\s*</script>', content, re.DOTALL)
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                    print(f"   从initialData提取到数据，keys: {list(data.keys())[:10]}")
+                    if "collections" in data:
+                        collections_data = data["collections"]
+                        if isinstance(collections_data, dict) and "data" in collections_data:
+                            collections_data = collections_data["data"]
+                        for c in collections_data:
+                            all_collections.append({
+                                "id": c.get("id", ""),
+                                "title": c.get("title", ""),
+                                "description": c.get("description", ""),
+                                "item_count": c.get("item_count", 0),
+                                "follower_count": c.get("follower_count", 0),
+                                "created_time": parse_time(c.get("created_time")),
+                                "updated_time": parse_time(c.get("updated_time")),
+                            })
+                        print(f"   从initialData找到 {len(all_collections)} 个收藏夹")
+                except Exception as e:
+                    print(f"   initialData解析失败: {e}")
+            
+            # 从页面元素中提取
+            if not all_collections:
+                items = page.query_selector_all(".CollectionItem, .collection-item, [data-za-detail-view-element_name='Collection']")
+                print(f"   从页面元素找到 {len(items)} 个收藏夹")
+                for item in items:
+                    try:
+                        title = item.query_selector(".CollectionItem-title, .title, a").inner_text()
+                        link = item.query_selector("a").get_attribute("href")
+                        collection_id = re.search(r'collection/(\d+)', link or "").group(1) if link else ""
+                        all_collections.append({
+                            "id": collection_id,
+                            "title": title or "",
+                            "description": "",
+                            "item_count": 0,
+                            "follower_count": 0,
+                            "created_time": "",
+                            "updated_time": "",
+                        })
+                    except:
+                        pass
+            
+            browser.close()
+    except ImportError:
+        print("   playwright未安装，跳过")
+    except Exception as e:
+        print(f"   playwright失败: {e}")
+    
+    # 方法2：尝试各种API
+    if not all_collections:
+        api_urls = [
+            f"https://www.zhihu.com/api/v4/people/{url_token}/collections",
+            f"https://www.zhihu.com/api/v4/members/{url_token}/collections",
+        ]
+        for api_url in api_urls:
+            print(f"   尝试API: {api_url}")
+            try:
+                resp = requests.get(api_url, headers=HEADERS, params={"offset": 0, "limit": 20}, timeout=15)
+                print(f"   状态码: {resp.status_code}")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    collections = data.get("data", [])
+                    if collections:
+                        for c in collections:
+                            all_collections.append({
+                                "id": c["id"],
+                                "title": c.get("title", ""),
+                                "description": c.get("description", ""),
+                                "item_count": c.get("item_count", 0),
+                                "follower_count": c.get("follower_count", 0),
+                                "created_time": parse_time(c.get("created_time")),
+                                "updated_time": parse_time(c.get("updated_time")),
+                            })
+                        break
+            except Exception as e:
+                print(f"   API失败: {e}")
+    
     return all_collections
 
 
@@ -285,10 +431,10 @@ def get_collection_items(collection_id, cookies=None, max_items=500):
                     "excerpt": content.get("excerpt", ""),
                     "voteup_count": content.get("voteup_count", 0),
                     "comment_count": content.get("comment_count", 0),
-                    "created_time": datetime.fromtimestamp(content.get("created_time", 0)).strftime("%Y-%m-%d"),
-                    "updated_time": datetime.fromtimestamp(content.get("updated_time", 0)).strftime("%Y-%m-%d"),
+                    "created_time": parse_time(content.get("created_time")),
+                    "updated_time": parse_time(content.get("updated_time")),
                     "url": f"https://www.zhihu.com/question/{question.get('id', '')}/answer/{content.get('id', '')}",
-                    "collection_time": datetime.fromtimestamp(item.get("created", 0)).strftime("%Y-%m-%d %H:%M"),
+                    "collection_time": parse_time(item.get("created"), "%Y-%m-%d %H:%M"),
                 })
             elif item_type == "article":
                 author = content.get("author", {})
@@ -302,10 +448,10 @@ def get_collection_items(collection_id, cookies=None, max_items=500):
                     "excerpt": content.get("excerpt", ""),
                     "voteup_count": content.get("voteup_count", 0),
                     "comment_count": content.get("comment_count", 0),
-                    "created_time": datetime.fromtimestamp(content.get("created", 0)).strftime("%Y-%m-%d"),
-                    "updated_time": datetime.fromtimestamp(content.get("updated", 0)).strftime("%Y-%m-%d"),
+                    "created_time": parse_time(content.get("created")),
+                    "updated_time": parse_time(content.get("updated")),
                     "url": f"https://zhuanlan.zhihu.com/p/{content.get('id', '')}",
-                    "collection_time": datetime.fromtimestamp(item.get("created", 0)).strftime("%Y-%m-%d %H:%M"),
+                    "collection_time": parse_time(item.get("created"), "%Y-%m-%d %H:%M"),
                 })
 
         if data.get("paging", {}).get("is_end", True):
@@ -980,6 +1126,15 @@ def main():
         print("\n⚠️  未检测到有效的 z_c0 Cookie，可能无法获取完整数据")
         print("   获取方法：浏览器登录知乎 → F12 → Application → Cookies → 复制 z_c0 的值")
         print()
+    
+    # 设置完整Cookie用于x-zse-96签名
+    full_cookie = args.cookie or ""
+    if not full_cookie and args.cookie_file and os.path.exists(args.cookie_file):
+        with open(args.cookie_file, "r", encoding="utf-8") as f:
+            full_cookie = f.read().strip()
+    if full_cookie:
+        set_zhihu_cookie(full_cookie)
+        print("✅ Cookie已设置（含x-zse-96签名）")
 
     # 1. 获取用户信息
     print("\n👤 获取用户信息...")
@@ -990,9 +1145,11 @@ def main():
     print(f"✅ 用户: {user_info['name']}")
     print(f"✅ 粉丝: {user_info['follower_count']:,} | 回答: {user_info['answer_count']:,} | 收藏夹: {user_info['favorite_count']:,}")
 
-    # 2. 获取收藏夹列表
+    # 2. 获取收藏夹列表（用用户信息返回的真实url_token）
     print("\n📁 获取收藏夹列表...")
-    collections = get_collections(url_token, cookies)
+    real_url_token = user_info.get("url_token", url_token)
+    print(f"   使用url_token: {real_url_token}")
+    collections = get_collections(real_url_token, cookies)
     print(f"✅ 找到 {len(collections)} 个收藏夹")
     for c in collections:
         print(f"   - {c['title']} ({c['item_count']}条)")
@@ -1028,7 +1185,11 @@ def main():
     analysis = analyze_items(all_items)
 
     # 6. 生成报告
-    output_path = args.output or f"zhihu_favorites_{url_token}.html"
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    user_name = user_info.get("name", url_token)
+    task_dir = f"output/{date_str}_favorites_{user_name}"
+    os.makedirs(task_dir, exist_ok=True)
+    output_path = args.output or f"{task_dir}/report.html"
     print(f"\n📝 生成HTML报告...")
     generate_html_report(user_info, collections, all_items, analysis, output_path)
 
