@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知乎收藏分析 - 残城之梦</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f0f2f5;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #0066ff 0%, #0084ff 50%, #00a6ff 100%);
+            color: white;
+            padding: 30px 40px;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header .headline { font-size: 14px; opacity: 0.9; margin-bottom: 12px; }
+        .user-meta { display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; opacity: 0.95; }
+        .container { max-width: 100%; margin: 0 auto; padding: 20px 32px; }
+        /* AI深度总结样式 */
+        .ai-summary {
+            background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 24px;
+            border-left: 4px solid #8b5cf6;
+        }
+        .ai-summary h3 { font-size: 20px; margin-bottom: 16px; color: #6d28d9; display: flex; align-items: center; gap: 8px; }
+        .ai-summary h4 { font-size: 17px; margin: 20px 0 12px 0; color: #7c3aed; border-bottom: 2px solid #ddd6fe; padding-bottom: 6px; }
+        .ai-summary p { font-size: 15px; line-height: 1.9; color: #333; margin-bottom: 10px; }
+        .ai-summary ul { padding-left: 24px; margin-bottom: 12px; }
+        .ai-summary li { font-size: 15px; line-height: 1.9; color: #333; margin-bottom: 8px; }
+        .ai-summary strong { color: #6d28d9; }
+        .ai-badge { display: inline-block; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 18px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .stat-card .label { font-size: 13px; color: #999; margin-bottom: 6px; }
+        .stat-card .value { font-size: 24px; font-weight: 600; color: #0066ff; }
+        .stat-card .sub { font-size: 12px; color: #bbb; margin-top: 4px; }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: white;
+            padding: 8px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            color: #666;
+        }
+        .tab:hover { background: #f5f5f5; }
+        .tab.active { background: #0066ff; color: white; font-weight: 500; }
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            margin-bottom: 24px;
+        }
+        .chart-container h3 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            padding-left: 10px;
+            border-left: 3px solid #0066ff;
+        }
+        .chart { width: 100%; height: 650px; }
+        /* 纯HTML条形图样式 */
+        .bar-chart { width: 100%; }
+        .bar-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+        .bar-label {
+            width: 140px;
+            flex-shrink: 0;
+            text-align: right;
+            font-size: 14px;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .bar-track {
+            flex: 1;
+            height: 28px;
+            background: #f0f2f5;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .bar-value {
+            width: 60px;
+            flex-shrink: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .hidden { display: none; }
+        .item-card {
+            display: flex;
+            gap: 16px;
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .item-rank {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #0066ff, #00a6ff);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .item-body { flex: 1; min-width: 0; }
+        .item-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .item-type {
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .item-title { font-weight: 600; font-size: 15px; color: #333; flex: 1; }
+        .item-score {
+            background: linear-gradient(135deg, #ff6b6b, #ffa502);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .item-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .item-meta a { color: #0066ff; text-decoration: none; }
+        .item-score-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .item-score-bar span {
+            background: #f0f7ff;
+            color: #0066ff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .item-content {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #555;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .collection-card {
+            padding: 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .collection-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #333; }
+        .collection-meta { display: flex; gap: 16px; font-size: 13px; color: #888; margin-bottom: 6px; flex-wrap: wrap; }
+        .collection-desc { font-size: 13px; color: #999; }
+        .insight-box {
+            background: linear-gradient(135deg, #e6f4ff 0%, #f0f5ff 100%);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border-left: 4px solid #0066ff;
+        }
+        .insight-box h4 { font-size: 15px; margin-bottom: 12px; color: #0066ff; }
+        .insight-box ul { padding-left: 20px; }
+        .insight-box li { margin-bottom: 8px; font-size: 14px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📚 残城之梦 的知乎收藏分析</h1>
+        <div class="headline">寻找绝境中的一抹生机</div>
+        <div class="user-meta">
+            <span>👥 0 粉丝</span>
+            <span>✅ 0 关注</span>
+            <span>📝 0 回答</span>
+            <span>📄 0 文章</span>
+            <span>📁 0 收藏夹</span>
+            <span>👍 0 获赞</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card"><div class="label">收藏夹数量</div><div class="value">16</div><div class="sub">个收藏夹</div></div>
+            <div class="stat-card"><div class="label">收藏内容</div><div class="value">214</div><div class="sub">条回答/文章</div></div>
+            <div class="stat-card"><div class="label">精华内容</div><div class="value">15</div><div class="sub">智能筛选TOP15</div></div>
+            <div class="stat-card"><div class="label">最高赞</div><div class="value">125,061</div><div class="sub">Mister</div></div>
+            <div class="stat-card"><div class="label">最热关键词</div><div class="value" style="font-size:18px;">学习</div><div class="sub">1455次</div></div>
+        </div>
+
+        <div class="insight-box">
+            <h4>🎯 收藏分析洞察</h4>
+            <ul>
+                <li>📌 收藏内容最热关键词：「<strong>学习</strong>」（1455次）</li>
+                <li>📝 标题最热词：「<strong>学习</strong>」（36次）</li>
+                <li>🏆 精华收藏第一名：<strong>你干过最牛的一件事是什么？</strong>（评分 68.5，88,122赞）</li>
+                <li>👤 收藏最多的作者：<strong>韦海生</strong>（4篇）</li>
+                <li>📊 内容类型：84篇回答 + 130篇文章</li>
+            </ul>
+        </div>
+
+        <!-- AI深度总结 -->
+        
+        <div class="ai-summary">
+            <h3>🤖 AI深度总结 <span class="ai-badge">DeepSeek生成</span></h3>
+            <h3>知乎用户「残城之梦」收藏夹深度分析报告</h3>
+<h4>一、收藏画像分析</h4>
+<h4>1. 收藏领域分布</h4>
+<p>该用户的收藏内容主要集中在以下领域：</p>
+<ul>
+<li><strong>个人成长与认知提升</strong>：这是最核心的收藏方向。收藏夹中"认知"（19条）、"成长"（9条）、"经验贴"（1条）等直接指向自我提升，TOP30内容中大量涉及"25岁做什么5年后受益匪浅""改命方法""为什么人在大运之前一定要先过情关"等成长类话题。</li>
+<li><strong>学习与知识管理</strong>：收藏夹"学"（26条）、"实用"（26条）、"书单"（15条）、"资源类"（20条）构成学习板块，高频关键词中"学习"出现474次、"知识"269次、"方法"189次，印证了强烈的学习导向。</li>
+<li><strong>AI与技术</strong>：收藏夹"AI"（4条）、"数据结构与算法"（9条），高频词"AI"226次、"代码"156次、"项目"190次，说明用户对技术领域有明确关注。</li>
+<li><strong>社会认知与人文思考</strong>：TOP30中大量涉及社会批判、历史人物评价、文艺界反思等内容，如"为什么教科书教我们善良，而社会却奖励厚黑""如何评价柳宗元""毛主席为什么要为纣王、秦始皇、曹操翻案"等。</li>
+<li><strong>移民与人生选择</strong>：高频词"移民"出现196次，这是一个值得注意的信号，说明用户在考虑或关注海外发展路径。</li>
+</ul>
+<h4>2. 兴趣偏好与学习方向</h4>
+<p>用户的兴趣呈现出 <strong>"内外兼修"</strong> 的特征：</p>
+<ul>
+<li><strong>向内</strong>：关注认知升级、思维方法、个人成长、心理建设；</li>
+<li><strong>向外</strong>：关注社会运行规律、历史规律、AI技术趋势、移民路径。</li>
+</ul>
+<p>整体来看，这是一个<strong>有较强自我驱动意识、处于人生关键决策期</strong>的用户，试图通过大量信息输入来解答"如何过好这一生"的核心命题。</p>
+<h4>3. 收藏内容质量</h4>
+<p><strong>整体质量较高</strong>。TOP30收藏内容中，赞同数普遍在数千到十万级别，作者多为各领域高赞答主（如李铁棍、明月楼、BugBuster喵等），内容兼具深度与可读性。但需注意，部分高赞内容属于"情绪共鸣型"而非"知识增量型"，如"为什么现在的00后好像什么都看透了"出现了两次（收藏15和16重复），说明用户在收藏时存在一定的<strong>情绪驱动</strong>特征。</p>
+<h4>二、知识体系梳理</h4>
+<h4>核心知识体系图谱</h4>
+<p>```</p>
+<p>┌──────────────────────────────┐</p>
+<p>│     人生决策与成长           │</p>
+<p>│  (认知/成长/经验/钱/人)      │</p>
+<p>└────────────┬─────────────────┘</p>
+<p>│</p>
+<p>┌──────────────────────┼──────────────────────┐</p>
+<p>│                      │                      │</p>
+<p>┌─────┴─────┐         ┌─────┴─────┐         ┌─────┴─────┐</p>
+<p>│ 思维方法  │         │ 技能学习  │         │ 社会认知  │</p>
+<p>│ 认知升级  │         │ AI/算法   │         │ 历史/人文 │</p>
+<p>│ 心理建设  │         │ 资源工具  │         │ 社会规律  │</p>
+<p>└───────────┘         └───────────┘         └───────────┘</p>
+<p>│                      │                      │</p>
+<p>┌─────┴─────┐         ┌─────┴─────┐         ┌─────┴─────┐</p>
+<p>│ 书单/阅读 │         │ 实用技能  │         │ 移民/选择 │</p>
+<p>│ 文笔提升  │         │ 工具网站  │         │ 人生路径  │</p>
+<p>└───────────┘         └───────────┘         └───────────┘</p>
+<p>```</p>
+<h4>各领域收藏丰富度</h4>
+<p>| 领域 | 收藏数量 | 丰富度 |</p>
+<p>|------|----------|--------|</p>
+<p>| 认知/成长/经验 | 约30条 | ⭐⭐⭐ 较丰富 |</p>
+<p>| 学习/实用/资源 | 约72条 | ⭐⭐⭐⭐ 丰富 |</p>
+<p>| AI/算法/技术 | 约13条 | ⭐⭐ 偏少 |</p>
+<p>| 书单/阅读 | 15条 | ⭐⭐ 偏少 |</p>
+<p>| 社会/历史/人文 | 散落各夹 | ⭐⭐⭐ 中等 |</p>
+<p>| 移民/人生选择 | 散落各夹 | ⭐⭐ 偏少但关键 |</p>
+<p><strong>明显短板</strong>：AI仅4条、数据结构与算法仅9条，但高频词中"AI"出现226次、"代码"156次，说明用户<strong>对技术有强烈兴趣但收藏沉淀不足</strong>，可能存在"看了但没存"或"想学但没系统整理"的情况。</p>
+<h4>三、精华内容推荐</h4>
+<p>从214条收藏中，精选以下7条最具价值的内容：</p>
+<h4>1. 《如何提升一个人的文笔？》—— 四只momo（59573赞同）</h4>
+<p><strong>推荐理由</strong>：这是一篇<strong>可立即实操</strong>的写作指南，核心方法"六个月内不用'想'动词"极具操作性。对于任何需要输出内容的人来说，这是收藏夹中最具"行动转化率"的一篇。建议<strong>优先阅读并立即实践</strong>。</p>
+<h4>2. 《25岁做什么，可在5年后受益匪浅？》—— 李栩然（25903赞同）</h4>
+<p><strong>推荐理由</strong>：直击用户核心关切——人生规划。文章通过"计划表"的案例，揭示了<strong>规划与执行之间的鸿沟</strong>，对处于迷茫期的年轻人有极强的现实指导意义。</p>
+<h4>3. 《为什么教科书教我们善良，而社会却奖励厚黑？》—— 明月楼（24061赞同）</h4>
+<p><strong>推荐理由</strong>：用《曹刿论战》的经典文本重新解读"善良与厚黑"的二元对立，提供了<strong>理解社会运行规则的底层逻辑</strong>，是认知升级类的典范之作。</p>
+<h4>4. 《微积分体系几百年前就建立起来了，为什么我们现在学习它仍存在困难？》—— BugBuster喵（24912赞同）</h4>
+<p><strong>推荐理由</strong>：不仅讲微积分，更讲<strong>人类认知规律与抽象思维的本质</strong>。对于想提升学习方法论的用户，这篇文章提供了"为什么学不会"的元认知视角。</p>
+<h4>5. 《26个网站帮您揭开各种疑惑》—— 滕王阁（31143赞同）</h4>
+<p><strong>推荐理由</strong>：<strong>纯工具型干货</strong>，涵盖查婚史、查案底、查学历、查企业等26个实用网站。信息密度高、即用性强，是收藏夹中"实用"分类的最佳代表。</p>
+<h4>6. 《改命方法（值得收藏）》—— 上岸成长经历（6384赞同）</h4>
+<p><strong>推荐理由</strong>：以《孙子兵法》为框架，提炼出19条人生策略（改命靠选妻、立威靠沉默、上位靠贵人等）。虽然部分观点可商榷，但作为<strong>决策参考框架</strong>有独特价值。</p>
+<h4>7. 《你什么时候意识到自己没见过世面？》—— Mister（125061赞同）</h4>
+<p><strong>推荐理由</strong>：12万赞同的超级高赞，内容虽短但<strong>冲击力极强</strong>。这类内容适合在需要打破认知局限时反复阅读。</p>
+<h4>四、收藏习惯分析</h4>
+<h4>1. 收藏时间与分类特征</h4>
+<ul>
+<li><strong>收藏夹数量多但分布极不均衡</strong>："我的收藏"独占791条（远超总数214条，说明该夹可能包含大量非公开或已删除内容），而"历史""经验贴""人""钱""技能"各仅1条，说明用户<strong>创建收藏夹时热情很高，但后续维护不足</strong>。</li>
+<li><strong>分类命名随意</strong>："学""实用""认知""成长"等分类边界模糊，存在大量交叉。例如"实用"（26条）与"资源类"（20条）在功能上高度重叠。</li>
+<li><strong>"我的收藏"成为默认垃圾桶</strong>：791条未分类内容说明用户<strong>缺乏收藏时的即时分类习惯</strong>，倾向于先存后整理（但后整理往往不会发生）。</li>
+</ul>
+<h4>2. 可能收藏了但没看的内容</h4>
+<ul>
+<li><strong>"我的收藏"中的791条</strong>：如此庞大的数量，按正常阅读速度，大概率有<strong>大量内容从未被二次打开</strong>。</li>
+<li><strong>重复收藏</strong>：收藏15和16完全重复（同一篇"00后看透"），说明用户在收藏时<strong>缺乏查重意识</strong>。</li>
+<li><strong>"历史""经验贴""人""钱""技能"各1条</strong>：这些收藏夹的存在本身说明用户曾想系统整理某类内容，但<strong>未能持续</strong>。</li>
+</ul>
+<h4>3. 分类优化建议</h4>
+<p>| 现有问题 | 优化建议 |</p>
+<p>|----------|----------|</p>
+<p>| 分类边界模糊 | 按"输入-处理-输出"重构：<strong>学习输入</strong>（书单/资源/AI/算法）、<strong>思维加工</strong>（认知/成长/经验）、<strong>行动输出</strong>（实用/技能/工具） |</p>
+<p>| "我的收藏"过大 | 设定<strong>每周清理日</strong>，将新收藏在48小时内归入对应分类 |</p>
+<p>| 重复收藏 | 收藏前搜索关键词，确认是否已存 |</p>
+<p>| 小分类过多（1条） | 合并为"待整理"临时夹，满5条后再拆分 |</p>
+<h4>五、学习建议</h4>
+<h4>1. 优先阅读顺序</h4>
+<p><strong>第一优先级（立即行动）</strong> ：</p>
+<ul>
+<li>《如何提升一个人的文笔》—— 因为写作是<strong>所有学习的放大器</strong></li>
+<li>《26个网站》—— 工具类内容<strong>即学即用</strong></li>
+</ul>
+<p><strong>第二优先级（认知重构）</strong> ：</p>
+<ul>
+<li>《为什么教科书教我们善良，而社会却奖励厚黑》</li>
+<li>《微积分体系为什么难学》</li>
+<li>《25岁做什么5年后受益匪浅》</li>
+</ul>
+<p><strong>第三优先级（系统学习）</strong> ：</p>
+<ul>
+<li>AI和数据结构与算法相关收藏（仅13条，需补充）</li>
+</ul>
+<h4>2. 具体学习建议</h4>
+<p><strong>建议一：建立"输出倒逼输入"机制</strong></p>
+<p>收藏了59573赞同的文笔提升方法，但<strong>不写就永远学不会</strong>。建议每周选一条收藏内容，写300字以上的读后感或实践笔记。</p>
+<p><strong>建议二：补齐AI与技术短板</strong></p>
+<p>高频词"AI"出现226次，但收藏仅4条，说明<strong>关注度高但沉淀不足</strong>。建议系统收藏AI入门到进阶的系列内容，并单独建立"AI学习路径"收藏夹。</p>
+<p><strong>建议三：对"移民"主题做专项整理</strong></p>
+<p>"移民"出现196次，但无专门收藏夹。建议建立"海外发展"收藏夹，系统收集移民政策、路径、经验贴，<strong>将模糊兴趣转化为可执行方案</strong>。</p>
+<p><strong>建议四：清理"我的收藏"</strong></p>
+<p>791条未分类内容中，<strong>至少50%可能已无价值</strong>。建议用"三问法"清理：①我还记得这条内容吗？②它对我当前目标有帮助吗？③如果现在看到还会收藏吗？三问皆否，果断删除。</p>
+<p><strong>建议五：建立"主题式学习"而非"碎片式收藏"</strong></p>
+<p>当前收藏呈碎片化，建议围绕3-5个核心主题（如"认知升级""AI入门""写作能力"）进行<strong>系统性收藏和学习</strong>，而非遇到好文就存。</p>
+<h4>六、总结</h4>
+<p><strong>残城之梦</strong>是一位<strong>有强烈成长意愿、处于人生关键探索期</strong>的知乎用户。其收藏内容以<strong>认知升级、学习方法、社会规律</strong>为主线，辅以AI技术和实用工具，整体质量较高，反映出用户试图通过信息输入来解答"如何更好地生活与发展"这一核心命题。然而，<strong>收藏夹分类混乱、"我的收藏"严重积压、重复收藏、技术类收藏不足</strong>等问题，说明用户处于"收藏即学习"的幻觉中，<strong>信息输入远大于知识内化</strong>。未来成长的关键不在于收藏更多，而在于<strong>建立输出机制、清理信息冗余、围绕核心主题进行系统性深度学习</strong>。如果能把收藏夹中10%的内容真正转化为行动和输出，其成长速度将远超继续收藏1000条新内容。</p>
+        </div>
+        
+
+        <div class="tabs">
+            <div class="tab active" data-tab="essence">🏆 精华收藏</div>
+            <div class="tab" data-tab="wordfreq">🔤 内容词频</div>
+            <div class="tab" data-tab="titlefreq">📝 标题词频</div>
+            <div class="tab" data-tab="authors">👤 作者分布</div>
+            <div class="tab" data-tab="month">📅 收藏时间</div>
+            <div class="tab" data-tab="type">📊 类型分布</div>
+            <div class="tab" data-tab="vote">👍 赞同分布</div>
+            <div class="tab" data-tab="collections">📁 收藏夹列表</div>
+            <div class="tab" data-tab="topvoted">📈 高赞内容</div>
+        </div>
+
+        <div class="chart-container" id="panel-essence">
+            <h3>🏆 智能筛选精华收藏TOP15（多维度评分）</h3>
+            
+        <div class="item-card">
+            <div class="item-rank">#1</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">你干过最牛的一件事是什么？</span>
+                    <span class="item-score">精华评分: 68.5</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 李铁棍</span>
+                    <span>👍 88,122</span>
+                    <span>💬 4983</span>
+                    <span>📝 7376字</span>
+                    <span>📅 收藏于 2025-04-21 15:28</span>
+                    <a href="https://www.zhihu.com/question/19861477/answer/1897672996883240368" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍97.0</span>
+                    <span title="评论数">💬96.4</span>
+                    <span title="内容长度">📏95.2</span>
+                    <span title="关键词密度">🔑4.7</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰50.9</span>
+                </div>
+                <div class="item-content">这件事差不多发生在9年前，是我三十而立的那年。我硬杠陕西省教育厅以及省招办，硬生生顶着巨大的各种有形或无形的压力，拒绝各路请托威胁甚至包括上级，乃至来自上级的上级的极限施压。红着眼，咬着牙，带着该死㞗朝天的心理建设，大不了工作不要了的思想准备，连续追踪报道十余天，咬定青山不松口。让一位原本被踢出局给别人让名额，但是家境普通学习优异的少年，如愿被招录进了北外上大学这一件事吧。事情的起因不复杂，源于最开始我在微博上看到了一封求助信，那个时候老夫是微博上一个小小的V，日常逛微博，也是找寻线索的一个来源途径，具体求助信内容如下。大概原委应该能看清吧？求助信全文就不放出来了，大概内容就是这样，我就不赘述了。我之所以对这封求助信感兴趣，完全是因为对里面的一句话感兴趣：七个通过初试的同学里，居然有三位同学拥有两地在同时举办的三场考试的成绩。其实说到这，可以给大家科普一个小小的常识，就是如果万一你在生活中...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#2</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">为什么教科书教我们善良，而社会却奖励厚黑？</span>
+                    <span class="item-score">精华评分: 66.1</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 明月楼</span>
+                    <span>👍 24,061</span>
+                    <span>💬 914</span>
+                    <span>📝 7413字</span>
+                    <span>📅 收藏于 2026-07-30 17:05</span>
+                    <a href="https://www.zhihu.com/question/2043055882670453819/answer/2066207805393082238" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍86.0</span>
+                    <span title="评论数">💬77.2</span>
+                    <span title="内容长度">📏95.2</span>
+                    <span title="关键词密度">🔑5.7</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰93.2</span>
+                </div>
+                <div class="item-content">你高中语文课上学过《曹刿论战》吧？齐国打鲁国，鲁庄公准备迎战，一个叫曹刿的平民求见。他问庄公，你凭什么打仗？庄公说我分衣食给近臣。曹刿说那是小恩惠，不够。庄公说我祭祀虔诚。曹刿说那是小信用，不够。庄公说我大小案件虽不能一一明察，但一定按实情处理。曹刿说，行了，”忠之属也，可以一战。”上战场，齐军击鼓，鲁庄公要迎击，曹刿说等等。齐军三鼓过后，曹刿说可以了。鲁军出击，齐军大败。庄公要追，曹刿又拦住了。他下车看了齐军车辙、登车看了齐军旗帜，然后说，”可矣。”遂逐齐师。战后鲁庄公问他，你这是什么打法？曹刿说（这一段全国人民背过）”夫战，勇气也。一鼓作气，再而衰，三而竭。彼竭我盈，故克之。”现在来看看本篇的第一句话：“十年春，齐师伐我。公将战。曹刿请见。其乡人曰：’肉食者谋之，又何间焉？’刿曰：’肉食者鄙，未能远谋。’”翻译过来就是——他的乡亲说，打仗是当官的人操心的事，你掺和什么？曹刿说，那些吃肉...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#3</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">微积分体系几百年前就建立起来了，为什么我们现在学习它仍存在困难？</span>
+                    <span class="item-score">精华评分: 64.8</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 BugBuster喵</span>
+                    <span>👍 24,912</span>
+                    <span>💬 1107</span>
+                    <span>📝 6258字</span>
+                    <span>📅 收藏于 2026-03-11 13:53</span>
+                    <a href="https://www.zhihu.com/question/435369583/answer/2015062701626373287" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍86.3</span>
+                    <span title="评论数">💬79.4</span>
+                    <span title="内容长度">📏97.5</span>
+                    <span title="关键词密度">🔑7.9</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰68.6</span>
+                </div>
+                <div class="item-content">你翻开你的高数课本，第一章大概率是讲函数和极限。然后马上就会出现一个反人类的定义，叫作ε-δ语言。课本会用严谨的符号告诉你，对于任意给定的极小正数，总存在另一个极小正数，使得当自变量的变化量小于后者时，函数值的变化量小于前者。大部分大一新生看到这里大脑就直接宕机了。这种纯逻辑的、高度抽象的定义，完全违背了人类认识世界的自然规律。你回想一下你高三学物理的时候，你是怎么理解瞬时速度的。一辆车在开，你求平均速度是用一段距离除以一段时间。那瞬时速度呢，就是让这段时间无限短，短到几乎等于零，这时候算出来的速度就是那一瞬间的速度。这是多么直观、多么符合物理现实的思考方式。当年牛顿发明微积分的时候，他脑子里想的根本不是什么ε-δ。牛顿是个物理学家，他研究的是天体运行、是物体的运动学规律。他面临的问题是物理学原有的初等代数工具不够用了。代数只能处理静止的、匀速的东西，但是世界是运动的、变速的。所以牛顿拍脑...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#4</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">为什么现在的00后好像什么都看透了？</span>
+                    <span class="item-score">精华评分: 64.3</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 缘辰</span>
+                    <span>👍 50,815</span>
+                    <span>💬 2159</span>
+                    <span>📝 3864字</span>
+                    <span>📅 收藏于 2024-09-25 14:24</span>
+                    <a href="https://www.zhihu.com/question/645928675/answer/3635560990" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍92.3</span>
+                    <span title="评论数">💬86.9</span>
+                    <span title="内容长度">📏92.4</span>
+                    <span title="关键词密度">🔑7.8</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰39.5</span>
+                </div>
+                <div class="item-content">我说句难听的吧。因为吃了太多人反刍出来的东西，看透本身就是假象。现在的意见领袖，全都在做一件事，那就是用最简单的话，让你觉得你明白了真理，“什么都看透了”。“什么都看透了”本身就是就是一个爽点，只有意见领袖们提供这种爽点，才会获得追捧，进而谋取利益。觉得自己学到了东西，觉得自己定位得到了升华，觉得自己“什么都看透了”，是一件很爽的事。所以这就导致了，现在各大平台，都流传着很多“一句话如何如何”，哪怕要讲电影，都是小帅，小美。而因为实际上大部分人并没有长篇阅读的能力，这就逼着意见领袖们为了提供爽点，让别人感觉自己高人一等，必须要把“道理”凝练成一句话，把秘诀凝练成一句话，这样别人一下子学会了，才会觉得爽，才会关注，点赞。但这问题是非常大的，因为一本好书，一部好电影，一个好游戏，或者任何道理，都是需要很详细的描述，体验，才能够真正领会真意，你一句话是总结不了的。而为了总结出来，为了让观众觉得自...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#5</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">你想推荐给别人哪些很爽无尿点的高分电影？</span>
+                    <span class="item-score">精华评分: 64.3</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 暖阳</span>
+                    <span>👍 86,368</span>
+                    <span>💬 1869</span>
+                    <span>📝 7553字</span>
+                    <span>📅 收藏于 2019-06-16 14:01</span>
+                    <a href="https://www.zhihu.com/question/267317643/answer/717265386" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍96.8</span>
+                    <span title="评论数">💬85.3</span>
+                    <span title="内容长度">📏94.9</span>
+                    <span title="关键词密度">🔑2.4</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰30</span>
+                </div>
+                <div class="item-content">这绝对是这个问题下最全的爽片盘点，总计31部电影，都是评分比较高的，不够爽的已经剔除，建议先马后看。（PS：欢迎大家在评论区推荐优秀的爽片，我看过后会考虑添加进来！）1、《被解救的姜戈 》 豆瓣评分：8.61858年，美国南北战争前两年。德国赏金猎人金·舒尔茨（克里斯托弗·瓦尔兹饰）从贩奴商人手中买下黑奴姜戈（杰米·福克斯 饰），让其重获自由。舒尔茨实则是要把姜戈培养成无法无天的赏金猎人，为其缉拿各种通缉犯以换取报酬。姜戈的唯一条件是：从暴虐的糖果庄园主卡尔文·坎迪（莱昂纳多·迪卡普里奥 饰）手中解救出自己的妻子布鲁姆希尔达……鬼才昆汀、小李子，还要说啥，光这两个人就必看阿！更何况还获了奥斯卡。简单介绍一下，西部片，重口味，各种火枪爆头、血肉横飞，这里有的是有仇必报，看你不爽就是干，心情压抑？来看这部，不过瘾算我输。附上帅气的小李子 \(^o^)/2、《飓风营救》 豆瓣评分：8.2特工布莱...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#6</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">如何看待原清华副教授‌郑毓煌称公立大学是纳税人建的，呼吁大学向社会开放？你赞同吗？</span>
+                    <span class="item-score">精华评分: 63.9</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 郑毓煌教授</span>
+                    <span>👍 13,625</span>
+                    <span>💬 3603</span>
+                    <span>📝 2931字</span>
+                    <span>📅 收藏于 2026-04-29 21:10</span>
+                    <a href="https://www.zhihu.com/question/2032499109517420421/answer/2032929818564636916" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍81.1</span>
+                    <span title="评论数">💬92.7</span>
+                    <span title="内容长度">📏86.2</span>
+                    <span title="关键词密度">🔑8.2</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰74.8</span>
+                </div>
+                <div class="item-content">大家好，我是郑毓煌。作为一个在中美两国顶尖学府都受过教育并在清华任教多年的学者，我有责任把这个真实的差距讲出来。因为我相信：一扇校门的开与关，折射的不只是管理方式，而是一所大学、乃至一个国家对于教育本质的理解。很多人以中国有14亿人口为由，认为因此中国大学不能向社会开放，否则会导致大学人满为患，影响教学秩序等。然而，我并不赞同这种归因。因此，就在这个月，我发起了一项“校门实验”，亲自走访了国内15所大学。结果我发现，有不少985、211名校如北京航空航天大学、中国农业大学、北京林业大学、北京外国语大学、中国矿业大学（北京）等都已经向全社会开放，也完全没有受到什么负面影响，校内并没有人满为患，教学秩序仍然井然有序，学生也为自己学校的开放而深深自豪。对比之下，中国3000所大学里的大多数学校尽管不是985或211名校，却大门紧闭，不向社会开放。这是校方的一种傲慢，也是一种懒政。因此，今天我决定...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#7</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">高知老人带娃是什么体验？</span>
+                    <span class="item-score">精华评分: 62.7</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 交叉骨</span>
+                    <span>👍 106,751</span>
+                    <span>💬 2743</span>
+                    <span>📝 1056字</span>
+                    <span>📅 收藏于 2022-04-05 21:40</span>
+                    <a href="https://www.zhihu.com/question/510311817/answer/2424808212" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍98.7</span>
+                    <span title="评论数">💬89.6</span>
+                    <span title="内容长度">📏73.7</span>
+                    <span title="关键词密度">🔑4.3</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰30</span>
+                </div>
+                <div class="item-content">我5岁学前班看书，问我奶奶：周瑜为啥是懦将？我奶奶：哪个懦？我：懦弱的懦？我奶奶：他不敢跟吴国太顶嘴，所以是懦将。我：原来如此。我爷爷：？？？说啥呢我瞅瞅………好家伙这写的是儒将！我：作文写不出来！我奶奶：你就写，下雨了，这让我想起古人的一首诗，莫听穿林打叶声………我：啊？我爷爷：。让孩子写那玩应呢，她老师能信吗？你就写，下雨了，我撑开小雨伞，穿着红舞鞋在雨里跑，打扰了蜗牛的梦。陌生老太太：回去告诉你奶奶上我家打麻将来。我：。好嘞。我奶奶（异常兴奋）：我去打麻将嘞，你记得让你爷爷陪你下楼练自行车！我：十动然拒。我爷爷：又指使我，又指使我，练什么自行车，现在谁家还有自行车，呸。我奶奶：你就吹吧，等将来妞妞跟同事出去旅游。人家都租个车飕飕就骑走了，就你妞妞原地干瞪眼。我：才不会呢。十年后………我同学A：就两公里，共享单车走起。我同学B：收到我：。。。。我奶奶：你爷爷侄子送来的鸡诶，是活的，咱自...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#8</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">小说《了不起的盖茨比》到底好在哪里？</span>
+                    <span class="item-score">精华评分: 62.4</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 杪秋</span>
+                    <span>👍 16,138</span>
+                    <span>💬 541</span>
+                    <span>📝 6633字</span>
+                    <span>📅 收藏于 2026-05-19 09:14</span>
+                    <a href="https://www.zhihu.com/question/20706948/answer/2039997281873699646" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍82.6</span>
+                    <span title="评论数">💬71.3</span>
+                    <span title="内容长度">📏96.7</span>
+                    <span title="关键词密度">🔑2.9</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰78.8</span>
+                </div>
+                <div class="item-content">这本书从头到尾没讲爱情，没讲逆袭，讲的是一个人怎么被自己骗了一辈子。我从头开始说起。但我不按时间顺序说，我按照一个人崩溃的顺序说。第一个问题：盖茨比到底是谁？这是个根本问题。盖茨比这个名字是自己起的。他原名叫詹姆斯·盖兹，一个北达科他州农民的儿子。他十六七岁的时候，在苏必利尔湖边救了一个喝醉的富翁，叫丹·科迪。科迪是个靠挖矿发了财的老头，有钱，但孤独，在船上漂着过日子。他收盖茨比当跟班，带了他五年。这五年里，盖茨比学会了穿西装，学会了喝红酒，学会了在饭桌上用哪种叉子。他还学会了一件最重要的事：有钱人的世界是可以装出来的。只要衣服穿对了，话讲对了，没人知道你爸是种地的。这个发现对他来说太重要了，因为他从小就觉得自己不该是农民。他爸是个老实巴交的庄稼人，但盖茨比看不上。他觉得他爸浑身上下写着一个字：穷。他不认这个命。然后丹·科迪死了。本来留给盖茨比一笔遗产，两万五千美元，不少。结果被科迪的亲戚...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#9</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">如何评价柳宗元？</span>
+                    <span class="item-score">精华评分: 62.3</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 杜千</span>
+                    <span>👍 18,103</span>
+                    <span>💬 512</span>
+                    <span>📝 6337字</span>
+                    <span>📅 收藏于 2026-04-17 23:26</span>
+                    <a href="https://www.zhihu.com/question/67323246/answer/2028615408765220741" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍83.5</span>
+                    <span title="评论数">💬70.7</span>
+                    <span title="内容长度">📏97.3</span>
+                    <span title="关键词密度">🔑4.5</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰72.4</span>
+                </div>
+                <div class="item-content">是个狠人。他非常超前地看穿了一件到今天依然适用的事，很多时候把人逼到变形甚至生不如死的，就是一整套看起来正常，满嘴都是为了大局着想的制度和安排。 谁说强者从不抱怨环境，不抱怨环境怎么看到环境的问题，不看到问题社会怎么进步？ 要看懂柳宗元，先把他这个人，从语文课本那堆刻板标签里拉出来。 柳宗元年轻的时候，是那种要扑进现实里去改天换地的人。他出身在大唐顶级门阀河东柳氏，这可是个出了名的硬骨头家族，世代为官，家风刚正。 他爹柳镇一辈子不攀附权贵，为了给冤臣辩白，不惜得罪宰相，被屡次贬官也绝不低头。这种祖传的刺头，从小就长在了柳宗元身上。 他二十一岁就一举考中进士，要知道大唐的科举极难，当时有句俗话叫三十老明经，五十少进士，意思是五十岁能考中进士都算年少有为了，他二十一岁就登科，比今天考中清北至少难十倍以上吧，简直是名动长安的天才。 到了二十六岁，他又通过了博学宏词科考试，进了集贤殿书院，相当于进...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#10</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">为什么杨振宁在95岁这么大岁数的时候要恢复中国国籍？</span>
+                    <span class="item-score">精华评分: 61.2</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 H3LICOPT3R</span>
+                    <span>👍 29,389</span>
+                    <span>💬 784</span>
+                    <span>📝 2361字</span>
+                    <span>📅 收藏于 2025-11-06 12:06</span>
+                    <a href="https://www.zhihu.com/question/56117319/answer/1969737310636605548" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍87.7</span>
+                    <span title="评论数">💬75.5</span>
+                    <span title="内容长度">📏82.4</span>
+                    <span title="关键词密度">🔑4.4</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰61.8</span>
+                </div>
+                <div class="item-content">下面是1976年毛泽东主席逝世，杨振宁在纽约追悼会上的演讲，当天约有2500人出席。二十世纪初（年）的中国社会是一个在封建主义和帝国主义层层压榨之下（的）暗无天日的社会，是一个农村整个（体）破产，工业被帝国主义全盘控制的社会。用鲁迅的话，是一个吃人的社会。面对着这些压榨，中国人民作了数不尽的英勇反抗。要了解那时候的历史，让我们来读《湖南农民运动考察报告》中的敏锐的预言，那是毛主席于一九二七年初写的：“很短的时间内，将有几万万农民从中国中部、南部和北部各省起来，其势如暴风骤雨，迅猛异常，无论什么大的力量都将压抑不住。他们将冲决一切束缚他们的罗网，朝着解放的路上迅跑。一切帝国主义、军阀、贪官污吏．土豪劣绅，都将被他们葬入坟墓。一切革命的党派、革命的同志，都将在他们面前受他们的检验而决定弃取。站在他们的前头领导他们呢？还是站在他们的后头指手画脚地批评他们呢?还是站在他们的对面反对他们呢?（每个中...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#11</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">觉得《送东阳马生序》写得有点虚伪，是不是我心态不好？</span>
+                    <span class="item-score">精华评分: 60.8</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 丛子建</span>
+                    <span>👍 45,957</span>
+                    <span>💬 678</span>
+                    <span>📝 2623字</span>
+                    <span>📅 收藏于 2025-01-26 19:10</span>
+                    <a href="https://www.zhihu.com/question/28478353/answer/87498342398" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍91.5</span>
+                    <span title="评论数">💬73.8</span>
+                    <span title="内容长度">📏84.2</span>
+                    <span title="关键词密度">🔑3.4</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰46.2</span>
+                </div>
+                <div class="item-content">我小时候就爱学习，倒不是说我这人天生就爱装腔作势摆什么谱，带着什么清高的命格，而是家里实在是穷的不行了，连让我上小学都上不起，我这么小的孩子，不去上学，我只能跟着家里下地，放牛，而我从小体弱多病，干不了什么活，全靠我的奶奶和我的妈妈细心照料，这个时候义务教育什么的又没普及，不识字的文盲满地满地的爬，我除了读书，我想不到什么回报奶奶和娘亲的事儿。没办法，我就从同学、朋友家里借点教科书之类的去读书上学，有时候还借一些闲书小说什么的来看，没得挑，人家有什么书我就看什么书，学校布置的作业要用上教科书，那实在没办法了我就抄书，抄原文，抄完了再还给人家。有时候遇上冬天，家里没暖气，没炉子，我手都冻得硬邦邦的，可我还能在屋里写写作业，我奶奶我娘那可是要实打实地出去给人干活，不行啊，我抄完了得还给人家，不然下次我怎么借，以后同学朋友亲戚怎么看我，我学业完不成，小学文凭都没有以后怎么生存，好在有一些朋友长辈...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#12</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">如何提升一个人的文笔？</span>
+                    <span class="item-score">精华评分: 60.4</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 四只momo</span>
+                    <span>👍 59,573</span>
+                    <span>💬 1026</span>
+                    <span>📝 1910字</span>
+                    <span>📅 收藏于 2021-12-26 13:22</span>
+                    <a href="https://www.zhihu.com/question/19591218/answer/2286480449" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍93.7</span>
+                    <span title="评论数">💬78.5</span>
+                    <span title="内容长度">📏79.4</span>
+                    <span title="关键词密度">🔑6.3</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰30</span>
+                </div>
+                <div class="item-content">六秒钟后你会恨死我，但六个月后你会成为更好的作家作者：恰克·帕拉尼克再过六秒钟，你会恨死我。但再过六个月，你会成为一个更好的作家。从现在开始——至少接下来半年之内——你不能用“想”动词。这包括：觉得，知道，明白，懂得，相信，想要，记得，想象，欲求，还有其他那一百个你喜欢用的词。这张单子还包括：爱和恨。它也包括：是和有，但这两个过一阵再说。直到圣诞节左右，你都不能写：肯尼觉得莫妮卡也许不喜欢他夜里外出……作为代替，你必须把这句话分解成：“有些早晨，肯尼在外面待得很晚，错过最后一班公交，直到他不得不搭便车或付钱搭出租，然后回到家发现莫妮卡在装睡，因为她从不如此安静地睡着，那些早晨，她只会把自己那杯咖啡放进微波炉里。从没有他的。”比起写你的角色知道什么是，你现在必须提供细节，让读者知道那些事。比起写一个角色想要什么东西，你现在必须描述那个东西，让读者也想要它。比起说：“亚当知道格温喜欢他。”你必...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#13</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">为什么人在大运之前一定要先过情关？</span>
+                    <span class="item-score">精华评分: 60.1</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 超然不物外</span>
+                    <span>👍 18,599</span>
+                    <span>💬 829</span>
+                    <span>📝 2413字</span>
+                    <span>📅 收藏于 2025-10-17 19:00</span>
+                    <a href="https://www.zhihu.com/question/1907350558035120300/answer/1962593843640796251" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍83.8</span>
+                    <span title="评论数">💬76.1</span>
+                    <span title="内容长度">📏82.8</span>
+                    <span title="关键词密度">🔑5.6</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰60.7</span>
+                </div>
+                <div class="item-content">品味过咱们上下五千年的历史，你就懂了。如果你还沉浸在 此生非他不可 的幻想里，听劝，别往下看了。这篇文章会让你清醒，但也会让你难受。历史上有太多人物，前半生神采奕奕，也有太多人物后半生才雄起直追项羽，力拔山兮气盖世。26岁破釜沉舟，灭秦称霸，31岁乌江自刎。刘邦，47岁还在当小混混。48岁起兵，54岁当了皇帝。你看，一个前半生精彩，一个后半生雄起。但现在呢？都是一杯黄土。我就想明白一件事现在你失恋了，痛苦了，要死要活的但当你视角拉高，你的这点事在历史长河里面连个水花都不算当你站在人生视角回望，得到可能的也就是一句“失恋了，当时很痛苦”，甚至你都不一定想得起来但恰恰因为这样，这件事才重要人生的轨迹就是“钱学森弹道”目的明确，但是路径未知。每个人的终点，四个字：“求得好死”。就这四个字。一个都跑不掉。你是人中龙凤也好，路边乞丐也罢。坐拥百亿资产也好，负债累累也罢。世事洞明也好，浑浑噩噩也罢。终...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#14</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#52c41a">文章</span>
+                    <span class="item-title">以正确的姿势，喝下当年明月的鸡汤</span>
+                    <span class="item-score">精华评分: 59.9</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 千年</span>
+                    <span>👍 7,004</span>
+                    <span>💬 782</span>
+                    <span>📝 3862字</span>
+                    <span>📅 收藏于 2026-05-22 20:51</span>
+                    <a href="https://zhuanlan.zhihu.com/p/2041191869711914856" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍75.4</span>
+                    <span title="评论数">💬75.4</span>
+                    <span title="内容长度">📏92.4</span>
+                    <span title="关键词密度">🔑2.3</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰79.4</span>
+                </div>
+                <div class="item-content">我家老大上周突然问我说：“爸，你觉得《明朝那些事儿》的结尾怪不怪？”“怪在哪，你说说看？”这不是个简单的问题。我家老大的历史储备不比我差，他早早就读完了渤海小吏、易中天和当年明月的全套，把我收藏的各种历史相关的书籍从战国读到明清，家里的书堆满了两面墙的书架和各种储物柜，倒逼我俩想买新书必须要先卖旧书腾地方，所以他的问题一定不简单。他接着说道，“全书写了那么多大人物的起起落落，看的人荡气回肠，但结局偏偏落笔在徐霞客这样一个对历史走向毫无影响的小人物？为什么说千秋霸业万古流芳都是粪土？还说成功只有一个，说要按照自己的方式，去度过人生。那金榜题目、功成名就不重要嘛？前面讲了那么多英雄豪杰算什么，真的是粪土吗？”这个问题问的我心头一震，我其实内心早就后悔从小就让他读了太多的历史书，平时只要我读完的书就丢给他，他读完我们俩就一块聊，一块跟着书里的人物命运唏嘘感叹，聊完了就接着读下一本。所以多年下来，...</div>
+            </div>
+        </div>
+        
+        <div class="item-card">
+            <div class="item-rank">#15</div>
+            <div class="item-body">
+                <div class="item-header">
+                    <span class="item-type" style="background:#0066ff">回答</span>
+                    <span class="item-title">为什么现在的00后好像什么都看透了？</span>
+                    <span class="item-score">精华评分: 58.3</span>
+                </div>
+                <div class="item-meta">
+                    <span>👤 不冷不热</span>
+                    <span>👍 54,846</span>
+                    <span>💬 2234</span>
+                    <span>📝 290字</span>
+                    <span>📅 收藏于 2024-08-14 11:47</span>
+                    <a href="https://www.zhihu.com/question/645928675/answer/3593993035" target="_blank">🔗 原文链接</a>
+                </div>
+                <div class="item-score-bar">
+                    <span title="赞同数">👍93.0</span>
+                    <span title="评论数">💬87.3</span>
+                    <span title="内容长度">📏54.2</span>
+                    <span title="关键词密度">🔑5.2</span>
+                    <span title="作者影响力">👤0</span>
+                    <span title="收藏时效">⏰37.2</span>
+                </div>
+                <div class="item-content">虚假的看透:一天刷了250条短视频，涉及军工，历史，农业，游戏，娱乐，擦边，卖货。放下手机以后感到虚无，觉得自己把什么都看透了。真是的看透:努力十年，发现因为没有背景未被领导提拔，考了600多分，发现出来找不着工作，为女朋友省吃俭用维系爱情，发现她绿了你，子欲养而亲不待，日日遗憾后悔。网络发达，短视频发达，让人在大脑中就好像能过完一生。可惜这都是假的，你的肉体仍在原地，你的梦想没有启程，你的头脑混乱，你的身体疲惫。你放弃了自己的主观能动性，被动接受信息输入，成为网红成功路上的一个又一个小心心和大拇指。你从没有去改变现状，却指望现状自己改变。你从没有看透什么，只是放弃了自己。</div>
+            </div>
+        </div>
+        
+        </div>
+
+        <div class="chart-container hidden" id="panel-wordfreq">
+            <h3>收藏内容关键词TOP30</h3>
+            <div class="bar-chart">
+            <div class="bar-row">
+                <div class="bar-label" title="学习">学习</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:100.0%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">1455</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="结点">结点</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:64.05498281786942%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">932</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="时间">时间</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:59.312714776632305%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">863</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="需要">需要</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:58.69415807560138%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">854</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="int">int</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:58.35051546391753%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">849</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="AI">AI</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.85910652920962%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">740</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="开始">开始</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:44.67353951890035%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">650</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="时候">时候</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:40.34364261168385%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">587</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="知识">知识</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:40.20618556701031%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">585</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="很多">很多</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:39.58762886597938%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">576</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="方法">方法</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:38.96907216494846%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">567</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="元素">元素</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:37.66323024054983%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">548</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="这些">这些</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:36.49484536082474%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">531</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="内容">内容</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:32.233676975945016%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">469</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="代码">代码</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:31.40893470790378%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">457</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="数据">数据</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:30.790378006872853%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">448</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="直接">直接</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:30.721649484536083%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">447</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="项目">项目</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:29.41580756013746%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">428</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="进行">进行</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:29.41580756013746%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">428</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="理解">理解</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:28.865979381443296%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">420</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="算法">算法</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:28.38487972508591%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">413</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="东西">东西</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:28.04123711340206%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">408</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="if">if</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:27.422680412371136%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">399</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="这样">这样</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:27.285223367697593%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">397</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="这种">这种</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:27.010309278350515%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">393</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="选择">选择</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:26.872852233676976%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">391</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="实现">实现</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.979381443298973%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">378</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="专业">专业</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.2233676975945%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">367</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="return">return</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.085910652920962%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">365</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="而是">而是</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:24.810996563573884%;background:linear-gradient(90deg,#0066ff,#00a6ff);"></div>
+                </div>
+                <div class="bar-value">361</div>
+            </div></div>
+        </div>
+
+        <div class="chart-container hidden" id="panel-titlefreq">
+            <h3>收藏标题关键词TOP20</h3>
+            <div class="bar-chart">
+            <div class="bar-row">
+                <div class="bar-label" title="学习">学习</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:100.0%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">36</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="为什么">为什么</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:69.44444444444444%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">25</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="如何">如何</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:58.333333333333336%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">21</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="哪些">哪些</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:36.11111111111111%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">13</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="方法">方法</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:36.11111111111111%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">13</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="推荐">推荐</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:33.33333333333333%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">12</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="AI">AI</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">9</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="读书">读书</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:22.22222222222222%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">8</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="数据结构">数据结构</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:22.22222222222222%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">8</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="本书">本书</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:22.22222222222222%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">8</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="大学">大学</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:22.22222222222222%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">8</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="时候">时候</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:19.444444444444446%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">7</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="自学">自学</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:19.444444444444446%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">7</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="总结">总结</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:19.444444444444446%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">7</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="网站">网站</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:16.666666666666664%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">6</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="信息">信息</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:13.88888888888889%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">5</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="算法">算法</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:13.88888888888889%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">5</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="大学生">大学生</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:13.88888888888889%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">5</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="知识">知识</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:13.88888888888889%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">5</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="高考">高考</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:11.11111111111111%;background:linear-gradient(90deg,#ff6b6b,#ffa502);"></div>
+                </div>
+                <div class="bar-value">4</div>
+            </div></div>
+        </div>
+
+        <div class="chart-container hidden" id="panel-authors">
+            <h3>收藏最多的作者TOP15</h3>
+            <div class="bar-chart">
+            <div class="bar-row">
+                <div class="bar-label" title="韦海生">韦海生</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:100.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">4</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="不动的推动者">不动的推动者</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="chenqin">chenqin</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="BugBuster喵">BugBuster喵</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="不冷不热">不冷不热</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="井冈山观心">井冈山观心</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="日辛说">日辛说</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="亚东">亚东</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="知识土匪">知识土匪</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:50.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">2</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="东沟红烧肉">东沟红烧肉</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">1</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="有童心的老王">有童心的老王</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">1</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="陆三金">陆三金</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">1</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="邦比快跑">邦比快跑</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">1</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="老老老陈醋">老老老陈醋</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">1</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="十十彣">十十彣</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:25.0%;background:linear-gradient(90deg,#52c41a,#95de64);"></div>
+                </div>
+                <div class="bar-value">1</div>
+            </div></div>
+        </div>
+
+        <div class="chart-container hidden" id="panel-month">
+            <h3>收藏时间分布（按月）</h3>
+            <div class="bar-chart" style="display:flex;align-items:flex-end;gap:8px;height:400px;padding:20px 0;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2011-12</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2014-08</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2017-05</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2018-05</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2018-06</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2019-06</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2020-09</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2020-10</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2021-01</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2021-04</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2021-06</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2021-08</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2021-09</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2021-12</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2022-02</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2022-03</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2022-04</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2022-07</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2023-02</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2023-07</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2023-08</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2023-11</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2023-12</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-02</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-03</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-05</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-06</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-07</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">4</span>
+            <div style="width:100%;height:43.75px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-08</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-09</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2024-12</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">3</span>
+            <div style="width:100%;height:32.8125px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-01</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">2</span>
+            <div style="width:100%;height:21.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-02</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">3</span>
+            <div style="width:100%;height:32.8125px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-03</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">4</span>
+            <div style="width:100%;height:43.75px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-04</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">5</span>
+            <div style="width:100%;height:54.6875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-05</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">3</span>
+            <div style="width:100%;height:32.8125px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-06</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">6</span>
+            <div style="width:100%;height:65.625px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-07</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">5</span>
+            <div style="width:100%;height:54.6875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-08</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">7</span>
+            <div style="width:100%;height:76.5625px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-09</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">4</span>
+            <div style="width:100%;height:43.75px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-10</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">5</span>
+            <div style="width:100%;height:54.6875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-11</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">5</span>
+            <div style="width:100%;height:54.6875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2025-12</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">21</span>
+            <div style="width:100%;height:229.6875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-01</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">15</span>
+            <div style="width:100%;height:164.0625px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-02</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">18</span>
+            <div style="width:100%;height:196.875px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-03</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">22</span>
+            <div style="width:100%;height:240.625px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-04</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">32</span>
+            <div style="width:100%;height:350.0px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-05</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">9</span>
+            <div style="width:100%;height:98.4375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-06</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">3</span>
+            <div style="width:100%;height:32.8125px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-07</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">1</span>
+            <div style="width:100%;height:10.9375px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">2026-08</span>
+        </div></div>
+        </div>
+
+        <div class="chart-container hidden" id="panel-type">
+            <h3>内容类型分布</h3>
+            <div style="padding:20px;">
+        <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:15px;font-weight:500;">回答</span>
+                <span style="font-size:14px;color:#666;">84篇 (39.3%)</span>
+            </div>
+            <div style="height:24px;background:#f0f2f5;border-radius:4px;overflow:hidden;">
+                <div style="width:39.25233644859813%;height:100%;background:#0066ff;border-radius:4px;"></div>
+            </div>
+        </div>
+        <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:15px;font-weight:500;">文章</span>
+                <span style="font-size:14px;color:#666;">130篇 (60.7%)</span>
+            </div>
+            <div style="height:24px;background:#f0f2f5;border-radius:4px;overflow:hidden;">
+                <div style="width:60.747663551401864%;height:100%;background:#52c41a;border-radius:4px;"></div>
+            </div>
+        </div></div>
+        </div>
+
+        <div class="chart-container hidden" id="panel-vote">
+            <h3>赞同数分布</h3>
+            <div class="bar-chart" style="display:flex;align-items:flex-end;gap:12px;height:400px;padding:20px 0;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">24</span>
+            <div style="width:100%;height:121.73913043478261px;background:linear-gradient(180deg,#ffa502,#ff6b6b);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;white-space:nowrap;">0-10</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">56</span>
+            <div style="width:100%;height:284.05797101449275px;background:linear-gradient(180deg,#ffa502,#ff6b6b);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;white-space:nowrap;">10-100</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">69</span>
+            <div style="width:100%;height:350.0px;background:linear-gradient(180deg,#ffa502,#ff6b6b);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;white-space:nowrap;">100-1000</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">44</span>
+            <div style="width:100%;height:223.18840579710144px;background:linear-gradient(180deg,#ffa502,#ff6b6b);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;white-space:nowrap;">1000-10000</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">21</span>
+            <div style="width:100%;height:106.5217391304348px;background:linear-gradient(180deg,#ffa502,#ff6b6b);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;white-space:nowrap;">>10000</span>
+        </div></div>
+        </div>
+
+        <div class="chart-container hidden" id="panel-collections">
+            <h3>我的收藏夹列表</h3>
+            
+        <div class="collection-card">
+            <div class="collection-title">📁 实用</div>
+            <div class="collection-meta">
+                <span>📝 26 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-02-05</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 我的收藏</div>
+            <div class="collection-meta">
+                <span>📝 791 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2025-11-02</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 历史</div>
+            <div class="collection-meta">
+                <span>📝 1 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-08-05</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 认知</div>
+            <div class="collection-meta">
+                <span>📝 19 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2025-12-27</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 学</div>
+            <div class="collection-meta">
+                <span>📝 26 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2025-12-27</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 问题</div>
+            <div class="collection-meta">
+                <span>📝 23 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-01-10</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 经验贴</div>
+            <div class="collection-meta">
+                <span>📝 1 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-06-20</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 成长</div>
+            <div class="collection-meta">
+                <span>📝 9 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-02-04</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 书单</div>
+            <div class="collection-meta">
+                <span>📝 15 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2025-12-27</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 资源类</div>
+            <div class="collection-meta">
+                <span>📝 20 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2025-12-27</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 AI</div>
+            <div class="collection-meta">
+                <span>📝 4 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-04-13</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 有趣</div>
+            <div class="collection-meta">
+                <span>📝 5 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-05-11</span>
+            </div>
+            <div class="collection-desc">有趣的东西</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 数据结构与算法</div>
+            <div class="collection-meta">
+                <span>📝 9 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-02-21</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 人</div>
+            <div class="collection-meta">
+                <span>📝 1 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-02-03</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 钱</div>
+            <div class="collection-meta">
+                <span>📝 1 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-01-24</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        <div class="collection-card">
+            <div class="collection-title">📁 技能</div>
+            <div class="collection-meta">
+                <span>📝 1 条内容</span>
+                <span>👥 0 关注者</span>
+                <span>📅 创建于 2026-01-10</span>
+            </div>
+            <div class="collection-desc">暂无描述</div>
+        </div>
+        
+        </div>
+
+        <div class="chart-container hidden" id="panel-topvoted">
+            <h3>高赞收藏TOP10</h3>
+            <div class="bar-chart">
+            <div class="bar-row">
+                <div class="bar-label" title="你什么时候意识到自己没见过世面？">你什么时候意识到自己没见过世面？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:100.0%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">125061</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="高知老人带娃是什么体验？">高知老人带娃是什么体验？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:85.35914473736817%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">106751</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="你干过最牛的一件事是什么？">你干过最牛的一件事是什么？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:70.46321395159161%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">88122</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="你想推荐给别人哪些很爽无尿点的高分电影？">你想推荐给别人哪些很爽无尿点的高分电影？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:69.06069837919095%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">86368</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="如何提升一个人的文笔？">如何提升一个人的文笔？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:47.63515404482612%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">59573</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="为什么现在的00后好像什么都看透了？">为什么现在的00后好像什么都看透了？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:43.85539856550004%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">54846</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="为什么现在的00后好像什么都看透了？">为什么现在的00后好像什么都看透了？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:43.85539856550004%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">54846</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="为什么现在的00后好像什么都看透了？">为什么现在的00后好像什么都看透了？</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:40.63217150030785%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">50815</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="觉得《送东阳马生序》写得有点虚伪，是不是我心态不好">觉得《送东阳马生序》写得有点虚伪，是不是我心态不好</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:36.74766713843644%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">45957</div>
+            </div>
+            <div class="bar-row">
+                <div class="bar-label" title="【知乎大神推荐】B站上那些值得收藏+反复观看的资源">【知乎大神推荐】B站上那些值得收藏+反复观看的资源</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:26.41590903639024%;background:linear-gradient(90deg,#722ed1,#b37feb);"></div>
+                </div>
+                <div class="bar-value">33036</div>
+            </div></div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const name = tab.dataset.tab;
+                ['essence','wordfreq','titlefreq','authors','month','type','vote','collections','topvoted'].forEach(n => {
+                    document.getElementById('panel-' + n).classList.toggle('hidden', n !== name);
+                });
+                setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+            });
+        });
+    </script>
+</body>
+</html>

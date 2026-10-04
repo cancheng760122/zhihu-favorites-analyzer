@@ -39,6 +39,160 @@ HEADERS = {
 ZHIHU_COOKIE = ""
 ZHIHU_DC0 = ""
 
+# DeepSeek API配置
+DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODEL = "deepseek-chat"
+
+
+def markdown_to_html(text):
+    """简单的Markdown转HTML"""
+    if not text:
+        return ""
+    lines = text.split("\n")
+    html_lines = []
+    in_list = False
+    in_ol = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            continue
+        if stripped.startswith("#### "):
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            html_lines.append(f"<h5>{stripped[5:]}</h5>"); continue
+        if stripped.startswith("### "):
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            html_lines.append(f"<h4>{stripped[4:]}</h4>"); continue
+        if stripped.startswith("## "):
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            html_lines.append(f"<h4>{stripped[3:]}</h4>"); continue
+        if stripped.startswith("# "):
+            if in_list: html_lines.append("</ul>"); in_list = False
+            if in_ol: html_lines.append("</ol>"); in_ol = False
+            html_lines.append(f"<h3>{stripped[2:]}</h3>"); continue
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            if not in_list:
+                if in_ol: html_lines.append("</ol>"); in_ol = False
+                html_lines.append("<ul>"); in_list = True
+            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', stripped[2:])
+            html_lines.append(f"<li>{content}</li>"); continue
+        ol_match = re.match(r'^(\d+)\.\s+(.+)$', stripped)
+        if ol_match:
+            if not in_ol:
+                if in_list: html_lines.append("</ul>"); in_list = False
+                html_lines.append("<ol>"); in_ol = True
+            content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', ol_match.group(2))
+            html_lines.append(f"<li>{content}</li>"); continue
+        if in_list: html_lines.append("</ul>"); in_list = False
+        if in_ol: html_lines.append("</ol>"); in_ol = False
+        content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', stripped)
+        html_lines.append(f"<p>{content}</p>")
+    if in_list: html_lines.append("</ul>")
+    if in_ol: html_lines.append("</ol>")
+    return "\n".join(html_lines)
+
+
+def deepseek_summary(api_key, user_info, collections, all_items):
+    """调用DeepSeek生成收藏夹内容深度总结"""
+    if not api_key:
+        return None
+    print("\n🤖 调用DeepSeek生成收藏夹深度总结...")
+
+    # 准备收藏夹概览
+    coll_text = ""
+    for c in collections:
+        coll_text += f"- {c.get('title','')}（{c.get('item_count',0)}条）\n"
+
+    # 准备高质量内容（取评分最高的30条）
+    sorted_items = sorted(all_items, key=lambda x: x.get("quality_score", {}).get("total", 0), reverse=True)[:30]
+    items_text = ""
+    for i, item in enumerate(sorted_items, 1):
+        title = item.get("title", "")
+        author = item.get("author", "")
+        content = clean_html(item.get("content", ""))[:300]
+        vote = item.get("voteup_count", 0)
+        items_text += f"\n【收藏{i}】{title} - {author}（{vote}赞同）\n{content}\n"
+
+    # 词频
+    all_texts = [clean_html(item.get("content", "")) for item in all_items[:100]]
+    word_freq = get_word_frequency(all_texts, top_n=20)
+    words_text = ", ".join([f"{w}({c}次)" for w, c in word_freq])
+
+    prompt = f"""你是一个专业的知识管理专家。请根据以下知乎用户的收藏夹数据，生成一份深度分析报告。
+
+【用户信息】
+用户名：{user_info.get('name','')}
+收藏夹数量：{len(collections)}
+收藏总内容数：{len(all_items)}
+
+【收藏夹列表】
+{coll_text}
+
+【高频关键词TOP20】
+{words_text}
+
+【高质量收藏内容TOP30】{items_text}
+
+请按以下格式生成深度分析报告（用中文，分点清晰，重点突出）：
+
+## 一、收藏画像分析
+- 这个用户的收藏内容主要集中在哪些领域？
+- 反映了用户怎样的兴趣偏好和学习方向？
+- 收藏内容的整体质量如何？
+
+## 二、知识体系梳理
+- 从收藏内容中可以梳理出怎样的知识体系？
+- 有哪些核心主题和分支？
+- 哪些领域收藏较多，哪些较少？
+
+## 三、精华内容推荐
+从收藏中挑选出5-8条最有价值的内容，说明为什么推荐。
+
+## 四、收藏习惯分析
+- 用户的收藏习惯是怎样的？（收藏时间分布、收藏夹分类等）
+- 有哪些收藏了但可能没看的内容？
+- 收藏夹的分类是否合理？有什么优化建议？
+
+## 五、学习建议
+- 基于用户的收藏内容，给出3-5条具体的学习建议
+- 哪些内容应该优先阅读？
+- 如何更好地利用这些收藏的知识？
+
+## 六、总结
+用一段话总结这个用户的收藏特点和成长方向。
+
+要求：
+1. 基于提供的信息，不要编造
+2. 重点突出，不要空泛的套话
+3. 给出具体可操作的建议
+4. 总字数控制在1500-2500字
+5. 重要信息用加粗标注"""
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": DEEPSEEK_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 4000
+        }
+        resp = requests.post(DEEPSEEK_API_URL, headers=headers, json=data, timeout=180)
+        resp.raise_for_status()
+        result = resp.json()
+        summary = result["choices"][0]["message"]["content"]
+        print(f"✅ 深度总结生成完成（约{len(summary)}字）")
+        return summary
+    except Exception as e:
+        print(f"⚠️  DeepSeek API调用失败: {e}")
+        return None
+
 
 def set_zhihu_cookie(cookie):
     """设置知乎Cookie并提取d_c0"""
@@ -615,7 +769,7 @@ def analyze_items(items):
 # HTML报告生成
 # ============================================================
 
-def generate_html_report(user_info, collections, all_items, analysis, output_path):
+def generate_html_report(user_info, collections, all_items, analysis, output_path, ai_summary=None):
     # 精华内容TOP15
     top_items = sorted(all_items, key=lambda x: x["quality_score"]["total"], reverse=True)[:15]
     # 高赞内容
@@ -679,13 +833,85 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
     month_dist = analysis.get("month_dist", {})
     vote_bins = analysis.get("vote_bins", {})
 
+    # 生成纯HTML条形图
+    def make_bar_chart(data, color_start, color_end, max_width=100):
+        if not data:
+            return "<p style='color:#999;padding:20px;'>暂无数据</p>"
+        max_val = max(v for _, v in data) if data else 1
+        if max_val == 0:
+            max_val = 1
+        html = '<div class="bar-chart">'
+        for label, value in data:
+            width = (value / max_val) * max_width
+            html += f'''
+            <div class="bar-row">
+                <div class="bar-label" title="{label}">{label}</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width:{width}%;background:linear-gradient(90deg,{color_start},{color_end});"></div>
+                </div>
+                <div class="bar-value">{value}</div>
+            </div>'''
+        html += '</div>'
+        return html
+
+    wordfreq_html = make_bar_chart(word_freq[:30], '#0066ff', '#00a6ff')
+    titlefreq_html = make_bar_chart(title_word_freq[:20], '#ff6b6b', '#ffa502')
+    authors_html = make_bar_chart(top_authors, '#52c41a', '#95de64')
+
+    # 收藏时间用纵向柱状图（简单HTML）
+    month_html = '<div class="bar-chart" style="display:flex;align-items:flex-end;gap:8px;height:400px;padding:20px 0;">'
+    max_month = max(month_dist.values()) if month_dist else 1
+    for month, count in month_dist.items():
+        height = (count / max_month) * 350 if max_month > 0 else 0
+        month_html += f'''
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">{count}</span>
+            <div style="width:100%;height:{height}px;background:linear-gradient(180deg,#0066ff,#00a6ff);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;transform:rotate(-30deg);white-space:nowrap;">{month}</span>
+        </div>'''
+    month_html += '</div>'
+
+    # 类型分布用简单百分比展示
+    type_total = sum(type_dist.values()) if type_dist else 1
+    type_html = '<div style="padding:20px;">'
+    colors = ['#0066ff', '#52c41a', '#ffa502', '#ff6b6b']
+    for i, (t, count) in enumerate(type_dist.items()):
+        pct = (count / type_total) * 100 if type_total > 0 else 0
+        type_html += f'''
+        <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:15px;font-weight:500;">{t}</span>
+                <span style="font-size:14px;color:#666;">{count}篇 ({pct:.1f}%)</span>
+            </div>
+            <div style="height:24px;background:#f0f2f5;border-radius:4px;overflow:hidden;">
+                <div style="width:{pct}%;height:100%;background:{colors[i % 4]};border-radius:4px;"></div>
+            </div>
+        </div>'''
+    type_html += '</div>'
+
+    # 赞同分布用纵向柱状图
+    vote_html = '<div class="bar-chart" style="display:flex;align-items:flex-end;gap:12px;height:400px;padding:20px 0;">'
+    max_vote = max(vote_bins.values()) if vote_bins else 1
+    for vrange, count in vote_bins.items():
+        height = (count / max_vote) * 350 if max_vote > 0 else 0
+        vote_html += f'''
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">{count}</span>
+            <div style="width:100%;height:{height}px;background:linear-gradient(180deg,#ffa502,#ff6b6b);border-radius:4px 4px 0 0;min-height:4px;"></div>
+            <span style="font-size:11px;color:#666;white-space:nowrap;">{vrange}</span>
+        </div>'''
+    vote_html += '</div>'
+
+    # 高赞内容条形图
+    top_voted_data = [(item['title'][:25], item['voteup_count']) for item in top_voted]
+    topvoted_html = make_bar_chart(top_voted_data, '#722ed1', '#b37feb')
+
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>知乎收藏分析 - {user_info['name']}</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -701,7 +927,22 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
         .header h1 {{ font-size: 24px; margin-bottom: 8px; }}
         .header .headline {{ font-size: 14px; opacity: 0.9; margin-bottom: 12px; }}
         .user-meta {{ display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; opacity: 0.95; }}
-        .container {{ max-width: 1400px; margin: 0 auto; padding: 24px; }}
+        .container {{ max-width: 100%; margin: 0 auto; padding: 20px 32px; }}
+        /* AI深度总结样式 */
+        .ai-summary {{
+            background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 24px;
+            border-left: 4px solid #8b5cf6;
+        }}
+        .ai-summary h3 {{ font-size: 20px; margin-bottom: 16px; color: #6d28d9; display: flex; align-items: center; gap: 8px; }}
+        .ai-summary h4 {{ font-size: 17px; margin: 20px 0 12px 0; color: #7c3aed; border-bottom: 2px solid #ddd6fe; padding-bottom: 6px; }}
+        .ai-summary p {{ font-size: 15px; line-height: 1.9; color: #333; margin-bottom: 10px; }}
+        .ai-summary ul {{ padding-left: 24px; margin-bottom: 12px; }}
+        .ai-summary li {{ font-size: 15px; line-height: 1.9; color: #333; margin-bottom: 8px; }}
+        .ai-summary strong {{ color: #6d28d9; }}
+        .ai-badge {{ display: inline-block; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }}
         .stats-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -751,7 +992,45 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
             padding-left: 10px;
             border-left: 3px solid #0066ff;
         }}
-        .chart {{ width: 100%; height: 400px; }}
+        .chart {{ width: 100%; height: 650px; }}
+        /* 纯HTML条形图样式 */
+        .bar-chart {{ width: 100%; }}
+        .bar-row {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 12px;
+        }}
+        .bar-label {{
+            width: 140px;
+            flex-shrink: 0;
+            text-align: right;
+            font-size: 14px;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+        .bar-track {{
+            flex: 1;
+            height: 28px;
+            background: #f0f2f5;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }}
+        .bar-fill {{
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }}
+        .bar-value {{
+            width: 60px;
+            flex-shrink: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }}
         .hidden {{ display: none; }}
         .item-card {{
             display: flex;
@@ -880,6 +1159,14 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
             </ul>
         </div>
 
+        <!-- AI深度总结 -->
+        {f'''
+        <div class="ai-summary">
+            <h3>🤖 AI深度总结 <span class="ai-badge">DeepSeek生成</span></h3>
+            {markdown_to_html(ai_summary)}
+        </div>
+        ''' if ai_summary else ''}
+
         <div class="tabs">
             <div class="tab active" data-tab="essence">🏆 精华收藏</div>
             <div class="tab" data-tab="wordfreq">🔤 内容词频</div>
@@ -899,32 +1186,32 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
 
         <div class="chart-container hidden" id="panel-wordfreq">
             <h3>收藏内容关键词TOP30</h3>
-            <div class="chart" id="chart-wordfreq"></div>
+            {wordfreq_html}
         </div>
 
         <div class="chart-container hidden" id="panel-titlefreq">
             <h3>收藏标题关键词TOP20</h3>
-            <div class="chart" id="chart-titlefreq"></div>
+            {titlefreq_html}
         </div>
 
         <div class="chart-container hidden" id="panel-authors">
             <h3>收藏最多的作者TOP15</h3>
-            <div class="chart" id="chart-authors"></div>
+            {authors_html}
         </div>
 
         <div class="chart-container hidden" id="panel-month">
             <h3>收藏时间分布（按月）</h3>
-            <div class="chart" id="chart-month"></div>
+            {month_html}
         </div>
 
         <div class="chart-container hidden" id="panel-type">
             <h3>内容类型分布</h3>
-            <div class="chart" id="chart-type"></div>
+            {type_html}
         </div>
 
         <div class="chart-container hidden" id="panel-vote">
             <h3>赞同数分布</h3>
-            <div class="chart" id="chart-vote"></div>
+            {vote_html}
         </div>
 
         <div class="chart-container hidden" id="panel-collections">
@@ -934,7 +1221,7 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
 
         <div class="chart-container hidden" id="panel-topvoted">
             <h3>高赞收藏TOP10</h3>
-            <div class="chart" id="chart-topvoted"></div>
+            {topvoted_html}
         </div>
     </div>
 
@@ -949,152 +1236,6 @@ def generate_html_report(user_info, collections, all_items, analysis, output_pat
                 }});
                 setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
             }});
-        }});
-
-        const wordFreqData = {json.dumps([[w,c] for w,c in word_freq], ensure_ascii=False)};
-        if (wordFreqData.length > 0) {{
-            const chart1 = echarts.init(document.getElementById('chart-wordfreq'));
-            chart1.setOption({{
-                tooltip: {{ trigger: 'axis', formatter: '{{b}}: {{c}}次' }},
-                grid: {{ left: 100, right: 40, top: 20, bottom: 30 }},
-                xAxis: {{ type: 'value', name: '出现次数' }},
-                yAxis: {{ type: 'category', data: wordFreqData.map(w=>w[0]).reverse(), axisLabel: {{fontSize:11}} }},
-                series: [{{
-                    data: wordFreqData.map(w=>w[1]).reverse(),
-                    type: 'bar',
-                    itemStyle: {{
-                        color: new echarts.graphic.LinearGradient(0,0,1,0,[
-                            {{offset:0,color:'#0066ff'}},{{offset:1,color:'#00a6ff'}}
-                        ]),
-                        borderRadius: [0,4,4,0]
-                    }}
-                }}],
-                dataZoom: [{{type:'slider',yAxisIndex:0,orient:'vertical',right:10,width:15}}]
-            }});
-        }}
-
-        const titleFreqData = {json.dumps([[w,c] for w,c in title_word_freq], ensure_ascii=False)};
-        if (titleFreqData.length > 0) {{
-            const chart2 = echarts.init(document.getElementById('chart-titlefreq'));
-            chart2.setOption({{
-                tooltip: {{ trigger: 'axis', formatter: '{{b}}: {{c}}次' }},
-                grid: {{ left: 100, right: 40, top: 20, bottom: 30 }},
-                xAxis: {{ type: 'value', name: '出现次数' }},
-                yAxis: {{ type: 'category', data: titleFreqData.map(w=>w[0]).reverse(), axisLabel: {{fontSize:11}} }},
-                series: [{{
-                    data: titleFreqData.map(w=>w[1]).reverse(),
-                    type: 'bar',
-                    itemStyle: {{
-                        color: new echarts.graphic.LinearGradient(0,0,1,0,[
-                            {{offset:0,color:'#ff6b6b'}},{{offset:1,color:'#ffa502'}}
-                        ]),
-                        borderRadius: [0,4,4,0]
-                    }}
-                }}]
-            }});
-        }}
-
-        const authorsData = {json.dumps([[a,c] for a,c in top_authors], ensure_ascii=False)};
-        const chart3 = echarts.init(document.getElementById('chart-authors'));
-        chart3.setOption({{
-            tooltip: {{ trigger: 'axis', formatter: '{{b}}: {{c}}篇' }},
-            grid: {{ left: 120, right: 40, top: 20, bottom: 30 }},
-            xAxis: {{ type: 'value', name: '收藏篇数' }},
-            yAxis: {{ type: 'category', data: authorsData.map(d=>d[0]).reverse(), axisLabel: {{fontSize:11}} }},
-            series: [{{
-                data: authorsData.map(d=>d[1]).reverse(),
-                type: 'bar',
-                itemStyle: {{
-                    color: new echarts.graphic.LinearGradient(0,0,1,0,[
-                        {{offset:0,color:'#52c41a'}},{{offset:1,color:'#95de64'}}
-                    ]),
-                    borderRadius: [0,4,4,0]
-                }}
-            }}]
-        }});
-
-        const monthData = {json.dumps(month_dist, ensure_ascii=False)};
-        const chart4 = echarts.init(document.getElementById('chart-month'));
-        chart4.setOption({{
-            tooltip: {{ trigger: 'axis', formatter: '{{b}}: {{c}}条' }},
-            grid: {{ left: 50, right: 30, top: 30, bottom: 50 }},
-            xAxis: {{ type: 'category', data: Object.keys(monthData), axisLabel: {{rotate: 45, fontSize: 11}} }},
-            yAxis: {{ type: 'value', name: '收藏数' }},
-            series: [{{
-                data: Object.values(monthData),
-                type: 'line',
-                smooth: true,
-                symbol: 'circle',
-                symbolSize: 6,
-                itemStyle: {{ color: '#0066ff' }},
-                areaStyle: {{
-                    color: new echarts.graphic.LinearGradient(0,0,0,1,[
-                        {{offset:0,color:'rgba(0,102,255,0.3)'}},
-                        {{offset:1,color:'rgba(0,102,255,0.05)'}}
-                    ])
-                }}
-            }}]
-        }});
-
-        const typeData = {json.dumps(type_dist, ensure_ascii=False)};
-        const chart5 = echarts.init(document.getElementById('chart-type'));
-        chart5.setOption({{
-            tooltip: {{ trigger: 'item', formatter: '{{b}}: {{c}}篇 ({{d}}%)' }},
-            legend: {{ bottom: 10 }},
-            series: [{{
-                type: 'pie',
-                radius: ['40%','70%'],
-                center: ['50%','45%'],
-                itemStyle: {{ borderRadius: 8, borderColor: '#fff', borderWidth: 2 }},
-                label: {{ formatter: '{{b}}\\n{{d}}%' }},
-                data: Object.entries(typeData).map(([k,v],i) => ({{
-                    name: k, value: v,
-                    itemStyle: {{ color: ['#0066ff','#52c41a','#ffa502','#ff6b6b'][i % 4] }}
-                }}))
-            }}]
-        }});
-
-        const voteData = {json.dumps(vote_bins, ensure_ascii=False)};
-        const chart6 = echarts.init(document.getElementById('chart-vote'));
-        chart6.setOption({{
-            tooltip: {{ trigger: 'axis', formatter: '{{b}}赞同: {{c}}篇' }},
-            grid: {{ left: 50, right: 30, top: 30, bottom: 40 }},
-            xAxis: {{ type: 'category', data: Object.keys(voteData) }},
-            yAxis: {{ type: 'value', name: '篇数' }},
-            series: [{{
-                data: Object.values(voteData),
-                type: 'bar',
-                barWidth: '50%',
-                itemStyle: {{
-                    color: new echarts.graphic.LinearGradient(0,0,0,1,[
-                        {{offset:0,color:'#ffa502'}},{{offset:1,color:'#ff6b6b'}}
-                    ]),
-                    borderRadius: [4,4,0,0]
-                }}
-            }}]
-        }});
-
-        const topVotedData = {json.dumps([[i['title'][:20], i['voteup_count']] for i in top_voted], ensure_ascii=False)};
-        const chart7 = echarts.init(document.getElementById('chart-topvoted'));
-        chart7.setOption({{
-            tooltip: {{ trigger: 'axis', formatter: '{{b}}: {{c}}赞同' }},
-            grid: {{ left: 150, right: 40, top: 20, bottom: 30 }},
-            xAxis: {{ type: 'value', name: '赞同数' }},
-            yAxis: {{ type: 'category', data: topVotedData.map(d=>d[0]).reverse(), axisLabel: {{fontSize:11}} }},
-            series: [{{
-                data: topVotedData.map(d=>d[1]).reverse(),
-                type: 'bar',
-                itemStyle: {{
-                    color: new echarts.graphic.LinearGradient(0,0,1,0,[
-                        {{offset:0,color:'#722ed1'}},{{offset:1,color:'#b37feb'}}
-                    ]),
-                    borderRadius: [0,4,4,0]
-                }}
-            }}]
-        }});
-
-        window.addEventListener('resize', () => {{
-            [chart1,chart2,chart3,chart4,chart5,chart6,chart7].forEach(c => c && c.resize());
         }});
     </script>
 </body>
@@ -1116,6 +1257,7 @@ def main():
     parser.add_argument("--cookie-file", help="Cookie文件路径")
     parser.add_argument("--max-items", type=int, default=500, help="每个收藏夹最多爬取内容数（默认500）")
     parser.add_argument("--output", "-o", default="", help="输出HTML文件路径")
+    parser.add_argument("--deepseek-api-key", default="", help="DeepSeek API Key（用于AI深度总结）")
     args = parser.parse_args()
 
     url_token = extract_user_token(args.user)
@@ -1184,6 +1326,11 @@ def main():
     print("📊 分析数据...")
     analysis = analyze_items(all_items)
 
+    # 5.5 DeepSeek AI深度总结
+    ai_summary = None
+    if args.deepseek_api_key:
+        ai_summary = deepseek_summary(args.deepseek_api_key, user_info, collections, all_items)
+
     # 6. 生成报告
     date_str = datetime.now().strftime("%Y-%m-%d")
     user_name = user_info.get("name", url_token)
@@ -1191,7 +1338,7 @@ def main():
     os.makedirs(task_dir, exist_ok=True)
     output_path = args.output or f"{task_dir}/report.html"
     print(f"\n📝 生成HTML报告...")
-    generate_html_report(user_info, collections, all_items, analysis, output_path)
+    generate_html_report(user_info, collections, all_items, analysis, output_path, ai_summary=ai_summary)
 
     print(f"\n🎉 分析完成！报告已保存至: {output_path}")
     print(f"   收藏夹: {len(collections)} 个")
